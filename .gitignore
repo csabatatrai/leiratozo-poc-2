@@ -10,7 +10,19 @@ build/
 dist/
 
 .env
-data/
-models/
+/data/
+/models/
 .cache/
 *.db
+
+# Valós hangfelvételek: nagy binárisok + potenciálisan PII/biometrikus adat
+# (hang = beszélő azonosítható) — sosem kerülnek git alá, ld. docs/phase1-terv.md
+# 6. szakasz (GDPR) és eval/README.md. Szintetikus, jogtiszta, pár-száz KB-os
+# teszt-fixture-ök kivételt kaphatnak, ha ténylegesen szükséges commitolni
+# egyet (git add -f).
+*.wav
+*.mp3
+*.m4a
+*.ogg
+*.flac
+eval/data/*/

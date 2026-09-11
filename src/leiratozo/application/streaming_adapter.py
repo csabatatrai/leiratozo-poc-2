@@ -2,7 +2,23 @@
 közelít élő streammé átfedő ablakokkal + merge-dzsel. Ez EXPLICIT közelítés
 (docs/phase1-terv.md 4. szakasz), nem valódi kauzális streaming, és csak akkor
 kerül bevetésre, ha a configolt ASR adapter `capabilities.supports_native_streaming`
-mezője False."""
+mezője False.
+
+MEGJEGYZÉS (2026-09-12, éles teszt talált hiba — ld. docs/manual_test_notes.md):
+a korábbi verzió egy fix `overlap_bytes` farkot tartott meg a pufferből minden
+flush után, és egy globális `emitted_word_count`-ot használt INDEXKÉNT az
+ÚJRA lekért (minden hívásnál a teljes aktuális pufferre újratranszkribált)
+szólistába. Ez két hibát okozott: (1) kevés/nagy tokent adó (szegmens-szintű)
+ASR-eknél a darabszám-alapú "utolsó negyed" heurisztika szinte sosem
+konfirmált semmit; (2) mivel a puffer minden flush után zsugorodik, a
+KÖVETKEZŐ hívás szava-listája MÁS (0-tól újraindexelt) tartományra
+vonatkozik, mint az előző — a puffer eleji, már megerősített tartalom emiatt
+DUPLIKÁLTAN újra megjelenhetett a kimeneten. A mostani verzió ezt úgy oldja
+meg, hogy (a) a stabil/bizonytalan szétválasztás IDŐALAPÚ, és (b) a
+pufferből KIZÁRÓLAG a ténylegesen megerősített hangidő kerül eldobásra —
+soha nem egy fix, feltételezett overlap-hossz —, globális idő-eltolás
+(`_dropped_sec`) követésével, hogy a kimeneti időbélyegek a session
+elejéhez, ne az aktuális (zsugorodó) pufferhez viszonyítva legyenek helyesek."""
 from __future__ import annotations
 
 from typing import AsyncIterator
@@ -29,6 +45,7 @@ class SlidingWindowStreamingAdapter:
         *,
         window_sec: float = 3.0,
         overlap_sec: float = 0.75,
+        max_buffer_sec: float | None = None,
         language: str | None = None,
     ) -> None:
         if engine.capabilities.supports_native_streaming:
@@ -40,10 +57,12 @@ class SlidingWindowStreamingAdapter:
         self._engine = engine
         self._window_sec = window_sec
         self._overlap_sec = overlap_sec
+        self._max_buffer_sec = max_buffer_sec if max_buffer_sec is not None else window_sec * 3
         self._language = language
         self._sample_rate: int | None = None
         self._buffer = bytearray()
-        self._emitted_word_count = 0
+        self._dropped_sec = 0.0  # a session eleje óta a pufferből eldobott (már megerősített) hangidő
+        self._event_counter = 0
         self._session_id: str | None = None
 
     @property
@@ -66,13 +85,13 @@ class SlidingWindowStreamingAdapter:
             yield event
 
     async def _flush_window(self, *, is_final_window: bool) -> AsyncIterator[PartialOrFinalTranscript]:
-        """Minden ablakon két réteget különböztet meg: a `confirmed` fej-rész már
-        nem fog megváltozni (a következő ablak sem írja felül) -> `is_final=True`;
-        a `tentative` farok-rész a folyó overlap miatt még módosulhat a következő
-        flush-nál -> `is_final=False`. Ez adja a valódi partial/final
-        megkülönböztetést (2. kemény megkötés), NEM az, hogy melyik flush a
-        stream-lezáró — a záró flush csupán azzal a különbséggel jár, hogy nincs
-        több adat, tehát MINDEN megmaradt szó azonnal confirmed."""
+        """A `words` MINDIG az AKTUÁLIS (esetlegesen már zsugorított) puffer
+        elejétől (helyi t=0) számított időbélyegeket ad — ezért a
+        megerősített szavak globális (session-eleji) időbélyegét
+        `_dropped_sec`-kel toljuk el kimenetkor, és a pufferből is pontosan
+        annyi hangidőt (nem egy fix overlapet!) vágunk le, amennyi ténylegesen
+        megerősödött — így a következő hívás helyi t=0-ja mindig a még
+        NEM megerősített tartalom elejére esik, sosem ismétel."""
         if not self._buffer or self._sample_rate is None:
             return
         audio = AudioBuffer(
@@ -83,34 +102,54 @@ class SlidingWindowStreamingAdapter:
         words = await self._engine.transcribe_batch(
             audio, language=self._language, hints=TranscriptionHints(language=self._language)
         )
-        new_words = words[self._emitted_word_count :]
-        if not new_words:
+        if not words:
             return
 
-        if is_final_window:
-            confirmed, tentative = new_words, []
+        if is_final_window or audio.duration_sec >= self._max_buffer_sec:
+            # Biztonsági felső korlát (ld. modul docstring, 2026-09-12-i éles
+            # teszt): ha a wrappelt engine olyan KEVÉS/NAGY szegmenst ad
+            # (pl. egy teljes ablakot lefedő 1 szegmenst), hogy sosem esik a
+            # stabil-küszöb alá, a puffer flush-onként nőne, sosem
+            # zsugorodna — ez egyre lassabb újratranszkripciót, végül
+            # kapcsolat-timeoutot és (a mögöttes ASR-nél) hosszú kontextusú
+            # ismétlődés-hallucinációt okozott élesben (távoli végponttal
+            # tesztelve). Ezért a puffer max. `_max_buffer_sec` fölött
+            # KÉNYSZERŰEN mindent megerősítünk, hogy a puffer garantáltan
+            # zsugorodjon — ritka esetben egy még nem teljesen stabil szöveg
+            # is finalizálódhat emiatt, de ez jobb, mint a korlátlan növekedés.
+            confirmed, tentative = words, []
         else:
-            overlap_word_count = max(1, len(new_words) // 4)
-            split = max(0, len(new_words) - overlap_word_count)
-            confirmed, tentative = new_words[:split], new_words[split:]
+            # Csak azok a szavak stabilak, amiknek a vége a (helyi) puffer
+            # végétől legalább `overlap_sec`-kal korábbra esik — ez időalapú,
+            # nem darabszám-alapú, tehát kevés/nagy tokennél (szegmens-szintű
+            # ASR) is helyesen viselkedik.
+            stable_cutoff_local = audio.duration_sec - self._overlap_sec
+            confirmed = [w for w in words if w.end <= stable_cutoff_local]
+            tentative = [w for w in words if w.end > stable_cutoff_local]
 
         if confirmed:
-            self._emitted_word_count += len(confirmed)
-            yield self._make_event(confirmed, is_final=True)
+            yield self._make_event(self._shift_to_global(confirmed), is_final=True)
+            confirmed_local_end = confirmed[-1].end
+            drop_bytes = int(confirmed_local_end * self._sample_rate * 2)
+            self._dropped_sec += confirmed_local_end
+            self._buffer = self._buffer[drop_bytes:]
         if tentative:
-            yield self._make_event(tentative, is_final=False)
+            yield self._make_event(self._shift_to_global(tentative), is_final=False)
 
         if is_final_window:
             self._buffer = bytearray()
-        else:
-            overlap_bytes = int(self._overlap_sec * self._sample_rate * 2)
-            self._buffer = self._buffer[-overlap_bytes:] if overlap_bytes else bytearray()
+
+    def _shift_to_global(self, words: list[WordToken]) -> list[WordToken]:
+        if self._dropped_sec == 0.0:
+            return words
+        return [w.model_copy(update={"start": w.start + self._dropped_sec, "end": w.end + self._dropped_sec}) for w in words]
 
     def _make_event(self, words: list[WordToken], *, is_final: bool) -> PartialOrFinalTranscript:
+        self._event_counter += 1
         text = " ".join(w.word for w in words)
         kind = "final" if is_final else "partial"
         segment = TranscriptSegment(
-            segment_id=f"live-{self._session_id}-{kind}-{self._emitted_word_count}",
+            segment_id=f"live-{self._session_id}-{kind}-{self._event_counter}",
             start=words[0].start,
             end=words[-1].end,
             text=text,

@@ -1,18 +1,31 @@
-"""Valódi "távoli HTTP ASR-végpont" adapter: egy már futó, külső leiratozó-
-szolgáltatást hív ki HTTP-n (multipart file upload), a TranscriptionEngine
-port mögött — így egy meglévő, akárki más által üzemeltetett ASR-szolgáltatás
-is kódmódosítás nélkül, configból bekötehető (docs/phase1-terv.md 1. szakasz:
-"minden portra legalább 2 adapter" — ez egy HARMADIK, gyakorlati ASR-adapter,
-ami azt demonstrálja, hogy a port nem csak in-process modelleket fogad el).
+"""Valódi "távoli HTTP ASR-végpont" adapter: egy már futó, akárki más által
+üzemeltetett leiratozó-szolgáltatást hív ki HTTP-n (multipart file upload), a
+TranscriptionEngine port mögött (docs/phase1-terv.md 1. szakasz: "minden
+portra legalább 2 adapter" — ez egy HARMADIK, gyakorlati ASR-adapter, ami azt
+demonstrálja, hogy a port nem csak in-process modelleket fogad el).
 
-A válaszséma egy konkrét, éles Whisper-alapú végponton (OpenAPI: "Whisper-
-large-v3-hu végpont") lett felderítve valós hívással:
+FONTOS — MODULARITÁS: ez az adapter NINCS egyetlen konkrét szerverhez kötve.
+A `base_url` (+ `transcribe_path`/`health_path`/`api_key_env`) teljes egészében
+configból jön (ld. config/config.remote-whisper.yaml) — egy MÁSIK, ugyanilyen
+válaszsémájú végpontra váltás kódmódosítás nélkül, egyetlen config-sor
+átírásával megy. Csak a `_parse_response` metódus feltételez egy konkrét,
+de igen elterjedt "Whisper-API-szerű" válasz-JSON-t (ld. lent) — ha egy
+JÖVŐBELI végpont ettől ELTÉRŐ szerkezetű választ ad, a helyes megoldás EGY ÚJ,
+kis adapter-alosztály (vagy önálló osztály) írása, ami csak ezt az egy
+metódust írja felül/cseréli, a HTTP/multipart/health-check logika
+újrahasznosításával — pontosan úgy, ahogy a projekt minden más portjára is
+több, egymástól független adapter épül.
+
+Az alapértelmezett `_parse_response` válaszsémája egy konkrét, éles
+Whisper-alapú TESZT-végponton lett felderítve valós hívással (2026-09-12,
+ld. docs/manual_test_notes.md) — ez a teszt-végpont csak egy PÉLDÁNY volt,
+nem architekturális függőség:
     {
       "text": str, "language": str, "language_probability": float,
       "duration_s": float, "processing_time_s": float, "rtf": float,
       "segments": [{"start": float, "end": float, "text": str}, ...]
     }
-FONTOS KORLÁT: ez a végpont csak SZEGMENS-szintű (nem szó-szintű) időbélyeget
+FONTOS KORLÁT: ez a séma csak SZEGMENS-szintű (nem szó-szintű) időbélyeget
 ad. Ezért capabilities.supports_word_timestamps=False, és minden szegmensből
 EGY WordToken lesz (a szegmens teljes szövegével) — ez durvább granularitású,
 mint a faster-whisper/Vosk adapterek szó-szintű kimenete, és a
@@ -106,13 +119,20 @@ class RemoteHttpAsrEngine:
         except Exception as exc:
             raise ModelUnavailableError(f"Távoli ASR-hívás sikertelen ({self._transcribe_url}): {exc}") from exc
 
+        return self._parse_response(payload, audio_duration_sec=audio.duration_sec)
+
+    def _parse_response(self, payload: dict, *, audio_duration_sec: float) -> list[WordToken]:
+        """Egy konkrét, "Whisper-API-szerű" válasz-JSON-t vár (ld. modul
+        docstring). MÁS válaszsémájú végponthoz ÍRJ EGY ALOSZTÁLYT, ami csak
+        ezt a metódust írja felül — a HTTP-hívás/health-check logikát
+        (`__init__`, `transcribe_batch`) nem kell duplikálni."""
         confidence = float(payload.get("language_probability") or 0.9)
         confidence = max(0.0, min(1.0, confidence))
         segments = payload.get("segments") or []
         if not segments and payload.get("text"):
             # A végpont üres `segments`-et is adhat nem-üres `text` mellett —
             # ilyenkor a teljes audio hosszát használjuk egyetlen tokenhez.
-            segments = [{"start": 0.0, "end": audio.duration_sec, "text": payload["text"]}]
+            segments = [{"start": 0.0, "end": audio_duration_sec, "text": payload["text"]}]
 
         return [
             WordToken(

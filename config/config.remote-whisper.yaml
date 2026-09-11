@@ -1,7 +1,17 @@
-# Demo config: valódi ASR a távoli "Whisper-large-v3-hu" HTTP-végponton
-# keresztül (adapters/asr/remote_http.py), minden más port fake — így a teljes
+# Demo config: valódi ASR egy távoli HTTP-végponton keresztül
+# (adapters/asr/remote_http.py), minden más port fake — így a teljes
 # leiratozó worker kipróbálható úgy, hogy a tényleges beszédfelismerést egy
 # már futó külső szolgáltatás végzi.
+#
+# A lenti `base_url` egy 2026-09-12-i, IDEIGLENES teszt-végpontra mutat (egy
+# "Whisper-large-v3-hu" nevű szolgáltatásra) — ez CSAK egy PÉLDA, nem
+# architekturális függőség. Bármilyen más, ugyanilyen válasz-JSON-t adó
+# (Whisper-API-szerű: {"text", "segments":[{"start","end","text"}]}) HTTP
+# ASR-végpont ide beköthető, egyetlen sor (`base_url`) átírásával,
+# kódmódosítás nélkül — pontosan ez a "modellagnosztikus" ígéret lényege
+# (docs/phase1-terv.md 1. szakasz). Ha egy jövőbeli végpont ETTŐL ELTÉRŐ
+# válaszsémát ad, ld. adapters/asr/remote_http.py modul docstring: írj egy
+# kis alosztályt, ami csak a `_parse_response`-t cseréli.
 #
 # Használat:
 #   CONFIG_PATH=config/config.remote-whisper.yaml python -m leiratozo.main

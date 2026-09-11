@@ -39,6 +39,11 @@ diarization-diart = ["diart>=0.9"]
 embedding-speechbrain = ["speechbrain>=1.0"]
 embedding-resemblyzer = ["resemblyzer>=0.1.4"]
 vad-silero = ["torch>=2.2", "torchaudio>=2.2"]
+# A tartós kiértékelő eszközhöz (eval/, ld. eval/README.md): WER-hez nem kell
+# extra függőség (tiszta Python); DER-hez (diarizációs pontosság) a
+# pyannote ökoszisztéma metrikái. NEM tesztelve élesen ebben a munkamenetben
+# (nincs még ground-truth RTTM) — ld. eval/metrics.py modul docstring.
+eval = ["pyannote.metrics>=3.2", "pyannote.database>=5.0", "websockets>=12.0", "httpx>=0.27"]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
@@ -50,4 +55,4 @@ packages = ["src/leiratozo"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["tests"]
+testpaths = ["tests", "eval/tests"]
