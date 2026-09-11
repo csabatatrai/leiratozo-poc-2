@@ -1,0 +1,43 @@
+# Demo config: valódi ASR a távoli "Whisper-large-v3-hu" HTTP-végponton
+# keresztül (adapters/asr/remote_http.py), minden más port fake — így a teljes
+# leiratozó worker kipróbálható úgy, hogy a tényleges beszédfelismerést egy
+# már futó külső szolgáltatás végzi.
+#
+# Használat:
+#   CONFIG_PATH=config/config.remote-whisper.yaml python -m leiratozo.main
+#   curl -F "file=@felvetel.wav" http://127.0.0.1:8080/v1/jobs
+#   curl http://127.0.0.1:8080/v1/jobs/<job_id>/result
+
+queue:
+  backend: inline
+
+storage:
+  job_store_adapter: fake
+  session_store_adapter: fake
+  profile_store:
+    backend: fake
+
+audio:
+  decoder_adapter: ffmpeg  # a felvetel.wav valós dekódolásához (extra: nincs, csak rendszer-ffmpeg)
+
+models:
+  vad:
+    adapter: fake
+  asr:
+    adapter: remote_http
+    params:
+      base_url: http://192.168.100.7:8001
+      transcribe_path: /transcribe
+      health_path: /health
+      # api_key_env: WHISPER_ENDPOINT_API_KEY   # csak ha a végpont tényleg kéri
+  diarization:
+    batch_adapter: fake
+    live_adapter: fake
+  speaker_embedding:
+    adapter: fake
+
+logging:
+  level: INFO
+  format: console
+
+preload_models: true

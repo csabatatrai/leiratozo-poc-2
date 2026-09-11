@@ -19,6 +19,7 @@ _REGISTRY: dict[str, dict[str, str]] = {
     "asr": {
         "faster_whisper": "leiratozo.adapters.asr.faster_whisper:FasterWhisperEngine",
         "vosk": "leiratozo.adapters.asr.vosk:VoskEngine",
+        "remote_http": "leiratozo.adapters.asr.remote_http:RemoteHttpAsrEngine",
         "fake": "leiratozo.adapters.asr.fake:FakeTranscriptionEngine",
     },
     "diarization_batch": {

@@ -77,6 +77,7 @@ adapterek, ML-függőség nélküli futtatáshoz). Legfontosabb szakaszok:
 |---|---|---|
 | ASR | `faster_whisper` | ✅ valódi, tesztelve ("tiny" modell) |
 | ASR | `vosk` | ✅ valódi, tesztelve (natív streaming) |
+| ASR | `remote_http` | ✅ valódi, tesztelve egy éles, külső HTTP Whisper-végponton keresztül (harmadik ASR-adapter — demonstrálja, hogy a port már futó, külső leiratozó-szolgáltatást is elfogad, nem csak in-process modellt; ld. `config/config.remote-whisper.yaml`) |
 | Diarizáció (batch) | `pyannote` | ✅ valódi kód; HF token nélkül a degradált út tesztelve élesen (ld. lent) |
 | Diarizáció (batch) | `nemo_msdd` | ✅ valódi kód (manifest+RTTM workflow); **nem élesen tesztelve** ebben a munkamenetben (nagy/lassú telepítés) |
 | Diarizáció (élő) | `diart` | ✅ valódi kód; **nem élesen tesztelve** (torchaudio/pyannote verzió-inkompatibilitás merült fel telepítéskor — ld. adapter modul docstring) |
@@ -94,6 +95,22 @@ hogy ezek a portok `degraded` állapotban indulnak (ld. `GET /readyz`), amíg
 valaki be nem állítja a `HF_TOKEN` env-változót és el nem fogadja a modell
 licencét a Hugging Face-en. Ez NEM crash-eli a szolgáltatást: más portok
 (ASR, embedding, VAD) eközben is kiszolgálnak kéréseket.
+
+**Kipróbálás egy meglévő távoli ASR-végponttal:**
+
+```bash
+CONFIG_PATH=config/config.remote-whisper.yaml python -m leiratozo.main
+curl -F "file=@felvetel.wav" http://127.0.0.1:8080/v1/jobs
+curl http://127.0.0.1:8080/v1/jobs/<job_id>/result
+```
+
+A `config/config.remote-whisper.yaml` az `asr.adapter: remote_http`-t
+használja — ez a mi `POST /v1/jobs` végpontunk mögött ténylegesen egy külső,
+már futó HTTP Whisper-szolgáltatást hív ki (`RemoteHttpAsrEngine`,
+`src/leiratozo/adapters/asr/remote_http.py`). Éles teszttel igazolva egy
+`http://.../health` + `http://.../transcribe` (multipart `file`, opcionális
+`X-API-Key`) alakú végponttal — más válaszsémájú végponthoz az adapter
+`transcribe_batch` metódusát kell a konkrét JSON-alakhoz igazítani.
 
 ## JSON kimeneti kontraktus
 
