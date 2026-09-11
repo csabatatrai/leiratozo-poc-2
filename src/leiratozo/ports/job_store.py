@@ -1,0 +1,16 @@
+"""JobStore port — batch job állapot + eredmény perzisztencia."""
+from __future__ import annotations
+
+from typing import Protocol, runtime_checkable
+
+from leiratozo.contracts.transcript_schema import TranscriptDocument
+from leiratozo.domain.models import TranscriptJob
+
+
+@runtime_checkable
+class JobStore(Protocol):
+    async def create(self, job: TranscriptJob) -> None: ...
+    async def get(self, job_id: str) -> TranscriptJob: ...
+    async def update(self, job: TranscriptJob) -> None: ...
+    async def save_result(self, job_id: str, document: TranscriptDocument) -> None: ...
+    async def get_result(self, job_id: str) -> TranscriptDocument | None: ...

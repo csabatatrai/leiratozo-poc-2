@@ -1,0 +1,31 @@
+# Skeleton/dev config: minden port a "fake" adaptert használja, így a teljes
+# API-felület (batch job, speaker-regisztráció, élő WS) futtatható és
+# tesztelhető ML-függőségek (torch, whisper, pyannote, ...) telepítése nélkül.
+#
+# Használat: CONFIG_PATH=config/config.fake.yaml uvicorn leiratozo.main:app
+
+storage:
+  job_store_adapter: fake
+  session_store_adapter: fake
+  profile_store:
+    backend: fake
+
+audio:
+  decoder_adapter: fake
+
+models:
+  vad:
+    adapter: fake
+  asr:
+    adapter: fake
+  diarization:
+    batch_adapter: fake
+    live_adapter: fake
+  speaker_embedding:
+    adapter: fake
+
+logging:
+  level: INFO
+  format: console
+
+preload_models: true

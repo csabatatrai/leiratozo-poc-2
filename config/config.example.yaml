@@ -1,0 +1,76 @@
+# Példa ÉLES-célú config — docs/phase1-terv.md 7. szakasz.
+#
+# A modell-adapterek némelyike (pl. pyannote) Hugging Face tokent és
+# licenc-elfogadást igényel — ld. security szakasz és docs/phase1-terv.md 10.
+# szakasz. Ezek az adapterek a 3. fázisban készülnek el; a 2. fázis (skeleton)
+# végponttól-végpontig futtatásához használd inkább a config.fake.yaml-t.
+
+server:
+  host: 0.0.0.0
+  port: 8080
+  api_key_env: API_KEY
+
+queue:
+  backend: redis
+  url: redis://redis:6379/0
+
+storage:
+  job_store_adapter: sqlite
+  session_store_adapter: sqlite
+  job_store_url: sqlite:////data/jobs.db
+  profile_store:
+    backend: encrypted_sqlite
+    path: /data/profiles.db
+    encryption_key_env: PROFILE_ENCRYPTION_KEY
+  model_cache_dir: /models
+
+audio:
+  decoder_adapter: ffmpeg
+
+security:
+  huggingface_token_env: HF_TOKEN
+  require_license_ack: true
+
+retention:
+  profile_retention_days: null
+  job_result_retention_days: 30
+
+device:
+  default: auto        # auto | cpu | cuda
+
+models:
+  vad:
+    adapter: silero
+    params:
+      threshold: 0.5
+  asr:
+    adapter: faster_whisper     # vagy: vosk (valódi natív streaminghez)
+    params:
+      model_size: large-v3
+      device: auto
+      compute_type: int8_float16
+  diarization:
+    batch_adapter: pyannote     # vagy: nemo_msdd
+    live_adapter: diart
+    params:
+      min_speakers: 1
+      max_speakers: 8
+  speaker_embedding:
+    adapter: speechbrain_ecapa  # vagy: resemblyzer
+    params: {}
+
+speaker_matching:
+  similarity_threshold: 0.72
+  unknown_label: "unknown"
+
+streaming:
+  chunk_ms: 500
+  overlap_ms: 200
+  transport: websocket
+  stabilization_window_sec: 3.0
+
+logging:
+  level: INFO
+  format: json
+
+preload_models: true

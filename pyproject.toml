@@ -1,0 +1,46 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "leiratozo"
+version = "0.1.0"
+description = "Modellagnosztikus, konfigurálható leiratozó worker (ASR + diarizáció + speaker-embedding)"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "pyyaml>=6.0",
+    "websockets>=12.0",
+    "cryptography>=42.0",
+    "python-multipart>=0.0.9",
+]
+
+# Konkrét ML-adapterek függőségei külön extrákban — a plugin registry csak azt
+# importálja lustán, amit a config ténylegesen kiválaszt (docs/phase1-terv.md 1. szakasz).
+# A 2. fázisban (skeleton) ezek egyike sincs implementálva ténylegesen; a stub
+# adapterek NotImplementedError-t dobnak példányosításkor, ld. adapters/*.
+[project.optional-dependencies]
+asr-faster-whisper = ["faster-whisper>=1.0"]
+asr-vosk = ["vosk>=0.3.45"]
+diarization-pyannote = ["pyannote.audio>=3.1"]
+diarization-nemo = ["nemo_toolkit[asr]>=1.23"]
+diarization-diart = ["diart>=0.9"]
+embedding-speechbrain = ["speechbrain>=1.0"]
+embedding-resemblyzer = ["resemblyzer>=0.1.4"]
+vad-silero = ["torch>=2.2", "torchaudio>=2.2"]
+audio = ["av>=12.0"]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "httpx>=0.27",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/leiratozo"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
