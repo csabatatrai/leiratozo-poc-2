@@ -16,6 +16,8 @@ dependencies = [
     "websockets>=12.0",
     "cryptography>=42.0",
     "python-multipart>=0.0.9",
+    "arq>=0.26",
+    "aiosqlite>=0.20",
 ]
 
 # Konkrét ML-adapterek függőségei külön extrákban — a plugin registry csak azt

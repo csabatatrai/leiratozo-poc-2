@@ -25,11 +25,10 @@ class JobStatusResponse(BaseModel):
 async def submit_job(request: Request, file: UploadFile) -> JobSubmitResponse:
     services = request.app.state.services
     raw_audio = await file.read()
-    job = await services.batch_service.submit(raw_audio, filename_hint=file.filename)
-    # 2. fázis (skeleton): inline fut, nincs még Redis/arq queue (3. fázis, ld.
-    # docs/phase1-terv.md 11. szakasz).
-    await services.batch_service.run(job.job_id, raw_audio, filename_hint=file.filename)
-    return JobSubmitResponse(job_id=job.job_id, status=JobStatus.QUEUED)
+    # queue.backend szerint dönt inline (dev/teszt) vs. Redis/arq (production) között
+    # — ld. api/deps.py ServiceContainer.submit_batch_job és queue/worker.py.
+    job = await services.submit_batch_job(raw_audio, filename_hint=file.filename)
+    return JobSubmitResponse(job_id=job.job_id, status=job.status)
 
 
 @router.get("/{job_id}", response_model=JobStatusResponse)

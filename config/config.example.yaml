@@ -18,6 +18,7 @@ storage:
   job_store_adapter: sqlite
   session_store_adapter: sqlite
   job_store_url: sqlite:////data/jobs.db
+  session_store_url: sqlite:////data/sessions.db
   profile_store:
     backend: encrypted_sqlite
     path: /data/profiles.db

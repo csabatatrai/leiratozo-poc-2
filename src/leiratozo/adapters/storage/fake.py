@@ -13,7 +13,11 @@ from leiratozo.domain.models import Embedding, LiveDiarizationState, LiveSession
 
 
 class InMemoryJobStore:
-    def __init__(self) -> None:
+    def __init__(self, **_extra: object) -> None:
+        # **_extra: a ServiceContainer minden storage-adapternek átadja a
+        # configolt storage-paramétereket (pl. url/path) — a fake ezeket
+        # figyelmen kívül hagyja, hogy ugyanaz a hívási minta működjön akkor is,
+        # ha "fake"-re van állítva az adapter.
         self._jobs: dict[str, TranscriptJob] = {}
         self._results: dict[str, TranscriptDocument] = {}
 
@@ -34,7 +38,7 @@ class InMemoryJobStore:
 
 
 class InMemorySessionStore:
-    def __init__(self) -> None:
+    def __init__(self, **_extra: object) -> None:
         self._sessions: dict[str, LiveSession] = {}
         self._diar_state: dict[str, LiveDiarizationState] = {}
 
@@ -61,7 +65,7 @@ class InMemorySessionStore:
 
 
 class InMemoryProfileStore:
-    def __init__(self) -> None:
+    def __init__(self, **_extra: object) -> None:
         self._profiles: dict[str, tuple[SpeakerProfile, Embedding]] = {}
 
     async def save(self, profile: SpeakerProfile, embedding: Embedding) -> None:

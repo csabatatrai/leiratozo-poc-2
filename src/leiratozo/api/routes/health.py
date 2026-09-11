@@ -1,7 +1,7 @@
 """Health/readiness — docs/phase1-terv.md 9. szakasz."""
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
 router = APIRouter(tags=["health"])
 
@@ -12,9 +12,12 @@ async def healthz() -> dict:
 
 
 @router.get("/readyz")
-async def readyz() -> dict:
-    """2. fázis (skeleton): a readiness mindig 'ready'-t jelez, mihelyt az app
-    elindult, mert a ServiceContainer eagerly példányosítja az adaptereket. A
-    3. fázisban ez port-szintű `degraded` állapotot fog tükrözni (hiányzó
-    licenc/token/GPU esetén) — ld. docs/phase1-terv.md 1. szakasz."""
-    return {"status": "ready"}
+async def readyz(request: Request) -> dict:
+    """A ServiceContainer eagerly próbálja betölteni a modelleket induláskor;
+    egy hiányzó HF token/licenc/eszköz nem dönti el a szolgáltatást, csak az
+    érintett portot jelöli `degraded`-nek (docs/phase1-terv.md 1. és 10.
+    szakasz) — ez a végpont ezt teszi láthatóvá, nem csak egy statikus "ready"-t
+    ad vissza."""
+    services = request.app.state.services
+    degraded = services.degraded_ports()
+    return {"status": "ready" if not degraded else "degraded", "degraded_ports": degraded}

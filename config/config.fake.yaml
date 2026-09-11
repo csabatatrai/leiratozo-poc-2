@@ -4,6 +4,9 @@
 #
 # Használat: CONFIG_PATH=config/config.fake.yaml uvicorn leiratozo.main:app
 
+queue:
+  backend: inline
+
 storage:
   job_store_adapter: fake
   session_store_adapter: fake

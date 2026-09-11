@@ -5,6 +5,7 @@ import pytest
 from leiratozo.config.schema import AppConfig
 
 FAKE_CONFIG_OVERRIDES = {
+    "queue": {"backend": "inline"},
     "models": {
         "vad": {"adapter": "fake"},
         "asr": {"adapter": "fake"},

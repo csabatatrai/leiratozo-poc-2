@@ -12,7 +12,7 @@ import importlib
 from dataclasses import dataclass
 from typing import Any
 
-from leiratozo.domain.errors import AdapterNotFoundError
+from leiratozo.domain.errors import AdapterNotFoundError, ModelUnavailableError
 
 # port_kind -> adapter_name -> "module.path:ClassName"
 _REGISTRY: dict[str, dict[str, str]] = {
@@ -105,3 +105,45 @@ def register(port_kind: str, adapter_name: str, dotted_path: str) -> None:
     """Teszteknek vagy integrátoroknak: további adapter regisztrálása e modul
     módosítása nélkül."""
     _REGISTRY.setdefault(port_kind, {})[adapter_name] = dotted_path
+
+
+class DegradedAdapter:
+    """Helyettesítő objektum egy olyan modell-adapter helyén, ami betöltéskor
+    `ModelUnavailableError`-t dobott (pl. hiányzó HF token/licenc-elfogadás —
+    docs/phase1-terv.md 1. és 10. szakasz). A ServiceContainer NEM omlik össze
+    emiatt: ez az objektum minden portmetódus-hívásra ugyanazt a hibát dobja,
+    de a `name`/`version`/`capabilities`/`mode`/`embedding_dim` attribútumok
+    biztonságosan olvashatók (pl. /v1/config, ModelInfo.collect), hogy azok NE
+    hasaljanak el a degradált port miatt."""
+
+    from leiratozo.domain.models import EngineCapabilities as _EngineCapabilities
+
+    def __init__(self, port_kind: str, adapter_name: str, error: ModelUnavailableError) -> None:
+        self.name = f"{adapter_name}-degraded"
+        self.version = "unavailable"
+        self.embedding_dim = 0
+        self.mode = "batch"
+        self.capabilities = self._EngineCapabilities(
+            supports_word_timestamps=False, supports_native_streaming=False, languages="auto"
+        )
+        self.port_kind = port_kind
+        self.adapter_name = adapter_name
+        self.error = error
+
+    def __getattr__(self, item: str):
+        async def _raise(*_args: Any, **_kwargs: Any) -> Any:
+            raise self.error
+
+        return _raise
+
+
+def instantiate_or_degrade(port_kind: str, adapter_name: str, params: dict[str, Any] | None = None) -> Any:
+    """Mint `instantiate`, de `ModelUnavailableError`-t (hiányzó token/licenc/
+    eszköz/letöltési hiba) elfog és `DegradedAdapter`-ré alakít, hogy a hívó
+    (ServiceContainer) tovább élhessen — más portok emiatt nem esnek el. Az
+    `AdapterNotFoundError` (hiányzó csomag/config hiba) VISZONT tovább terjed:
+    az fail-fast konfigurációs hiba, nem futásidejű degradáció."""
+    try:
+        return instantiate(port_kind, adapter_name, params)
+    except ModelUnavailableError as exc:
+        return DegradedAdapter(port_kind, adapter_name, exc)

@@ -1,0 +1,67 @@
+# Példa futtatás: docs/phase1-terv.md 9. és 11. szakasz.
+#
+# Gyors, ML-súlyok nélküli smoke-teszt (csak `fake` adapterek):
+#   CONFIG_PATH=config/config.fake.yaml docker compose up --build
+#
+# "Éles"-közeli, valódi adapterekkel (a szükséges pyproject extra-csoportokat a
+# build.args EXTRAS listájában kell felsorolni — ld. Dockerfile fejléce):
+#   docker compose --profile full up --build
+
+services:
+  worker:
+    build:
+      context: .
+      args:
+        # Alapértelmezetten üres -> csak a `fake` adapterek működnek (ld.
+        # Dockerfile fejléce). Éles adapterekhez pl.:
+        # EXTRAS: "asr-faster-whisper,asr-vosk,embedding-speechbrain,embedding-resemblyzer,vad-silero,audio"
+        EXTRAS: "${EXTRAS:-}"
+    image: leiratozo:local
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      # A mountolt config/ könyvtárból választható konkrét fájl; alapértelmezésben
+      # az éles-célú példa, de dev/smoke-teszthez CONFIG_PATH=config/config.fake.yaml-lal
+      # felülírható (ld. .env vagy a compose indító parancs env-je).
+      CONFIG_PATH: "${CONFIG_PATH:-/app/config/config.example.yaml}"
+    volumes:
+      - ./config:/app/config:ro
+      - models:/models
+      - data:/data
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    # GPU-opció (nincs GPU ebben a fejlesztői környezetben, ezért kikommentezve).
+    # Éles, CUDA-képes hoszton: állítsd DEVICE__DEFAULT=cuda-ra a .env-ben, és
+    # vedd ki a kommentet az alábbi blokkból (Docker Compose >= 1.28,
+    # NVIDIA Container Toolkit szükséges a hoszton):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  redis:
+    image: redis:7-alpine
+    # A jövőbeli arq-alapú batch job-queue-hoz (docs/phase1-terv.md 11. szakasz);
+    # `queue.backend: inline` config esetén (ld. config/config.fake.yaml) a worker
+    # nem használja, de a service így is elérhető marad a redis-backendes confighoz
+    # való váltáshoz kódmódosítás nélkül.
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+volumes:
+  models:
+  data:
+  redis-data:

@@ -16,7 +16,11 @@ class ServerConfig(BaseModel):
 
 
 class QueueConfig(BaseModel):
-    backend: Literal["redis"] = "redis"
+    backend: Literal["redis", "inline"] = "redis"
+    """`inline`: a batch job szinkron-inline fut a kérést kiszolgáló process-ben
+    (nincs külön worker/Redis-függés) — kizárólag dev/teszt célra (ld.
+    config/config.fake.yaml). `redis`: valódi arq-alapú queue, külön worker
+    process dolgozza fel (ld. queue/worker.py) — ez a production alapértelmezés."""
     url: str = "redis://redis:6379/0"
 
 
@@ -30,6 +34,7 @@ class StorageConfig(BaseModel):
     job_store_adapter: str = "sqlite"
     session_store_adapter: str = "sqlite"
     job_store_url: str = "sqlite:////data/jobs.db"
+    session_store_url: str = "sqlite:////data/sessions.db"
     profile_store: ProfileStoreConfig = Field(default_factory=ProfileStoreConfig)
     model_cache_dir: str = "/models"
 

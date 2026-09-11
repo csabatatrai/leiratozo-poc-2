@@ -24,7 +24,8 @@ def _client(fake_config: AppConfig) -> TestClient:
 def test_health_and_ready(fake_config: AppConfig):
     with _client(fake_config) as client:
         assert client.get("/healthz").json() == {"status": "ok"}
-        assert client.get("/readyz").json() == {"status": "ready"}
+        ready_body = client.get("/readyz").json()
+        assert ready_body == {"status": "ready", "degraded_ports": {}}
 
 
 def test_runtime_config_reports_selected_adapters(fake_config: AppConfig):

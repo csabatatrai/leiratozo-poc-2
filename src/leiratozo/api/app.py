@@ -2,6 +2,9 @@
 kontraktusért."""
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
+
 from fastapi import FastAPI
 
 from leiratozo.api.deps import ServiceContainer, get_config
@@ -15,8 +18,20 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     cfg = config or get_config()
     configure_logging(cfg.logging.level, cfg.logging.format)
 
-    app = FastAPI(title="Leiratozó Worker", version="0.1.0")
-    app.state.services = ServiceContainer(cfg)
+    services = ServiceContainer(cfg)
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        # queue.backend=="redis" esetén itt épül fel az arq/Redis pool; "inline"
+        # esetén (config.fake.yaml, tesztek) nincs teendő — ld. deps.ServiceContainer.
+        await services.start()
+        try:
+            yield
+        finally:
+            await services.stop()
+
+    app = FastAPI(title="Leiratozó Worker", version="0.1.0", lifespan=lifespan)
+    app.state.services = services
 
     app.include_router(health.router)
     app.include_router(jobs.router)
