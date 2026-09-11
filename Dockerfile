@@ -16,7 +16,7 @@
 # Példa: minden ASR+embedding+VAD extra, diarizáció nélkül (a gated pyannote/nemo/
 # diart-ot külön, tudatos döntéssel kell bekapcsolni):
 #   docker build \
-#     --build-arg EXTRAS=asr-faster-whisper,asr-vosk,embedding-speechbrain,embedding-resemblyzer,vad-silero,audio \
+#     --build-arg EXTRAS=asr-faster-whisper,asr-vosk,embedding-speechbrain,embedding-resemblyzer,vad-silero \
 #     -t leiratozo:full .
 #
 # Alapértelmezett (EXTRAS üres) build: csak a core (FastAPI stb.) — ezzel KIZÁRÓLAG
@@ -29,10 +29,9 @@ ARG EXTRAS=""
 
 WORKDIR /build
 
-# ffmpeg kell az `audio`/ffmpeg-decoder extrához futásidőben is (runtime stage-be
-# is telepítjük lentebb) — build stage-ben csak a Python csomagok fordításához
-# esetenként szükséges build-essential-t tesszük be, hogy natív kiterjesztések
-# (pl. egyes ML-csomagok) lefordulhassanak.
+# build-essential: néhány ML-csomag natív kiterjesztést fordít telepítéskor.
+# (Az AudioDecoder `ffmpeg` binárist hív subprocessben, nem pip-csomag — azt
+# csak a runtime stage-ben telepítjük lentebb.)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
     && rm -rf /var/lib/apt/lists/*
@@ -60,7 +59,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 FROM python:3.11-slim AS runtime
 
-# ffmpeg: az AudioDecoder port `ffmpeg` adaptere (audio extra) ezt igényli
+# ffmpeg: az AudioDecoder port `ffmpeg` adaptere subprocessben hívja ezt a binárist
 # futásidőben is a wav/mp3/m4a/ogg/flac dekódoláshoz.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ffmpeg curl \

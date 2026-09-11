@@ -22,8 +22,13 @@ dependencies = [
 
 # Konkrét ML-adapterek függőségei külön extrákban — a plugin registry csak azt
 # importálja lustán, amit a config ténylegesen kiválaszt (docs/phase1-terv.md 1. szakasz).
-# A 2. fázisban (skeleton) ezek egyike sincs implementálva ténylegesen; a stub
-# adapterek NotImplementedError-t dobnak példányosításkor, ld. adapters/*.
+# Fázis 3 státusz (README.md-ben részletezve): faster-whisper, vosk, pyannote,
+# speechbrain, resemblyzer, silero (torch) — valódi modellel tesztelve. NeMo
+# MSDD és diart — implementálva, de ebben a munkamenetben élesen NEM
+# tesztelve (nagy/lassú telepítés, ill. diart esetén valódi torchaudio/
+# pyannote verzió-inkompatibilitás merült fel — ld. adapters/diarization/
+# diart.py modul docstring). Ha ezt az extrát használod, pinneld explicit a
+# kompatibilis torch/torchaudio/pyannote.audio verzió-hármast.
 [project.optional-dependencies]
 asr-faster-whisper = ["faster-whisper>=1.0"]
 asr-vosk = ["vosk>=0.3.45"]
@@ -33,7 +38,6 @@ diarization-diart = ["diart>=0.9"]
 embedding-speechbrain = ["speechbrain>=1.0"]
 embedding-resemblyzer = ["resemblyzer>=0.1.4"]
 vad-silero = ["torch>=2.2", "torchaudio>=2.2"]
-audio = ["av>=12.0"]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",

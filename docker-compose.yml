@@ -1,11 +1,14 @@
 # Példa futtatás: docs/phase1-terv.md 9. és 11. szakasz.
 #
-# Gyors, ML-súlyok nélküli smoke-teszt (csak `fake` adapterek):
-#   CONFIG_PATH=config/config.fake.yaml docker compose up --build
+# Gyors, ML-súlyok nélküli smoke-teszt (csak `fake` adapterek, queue.backend:
+# inline -> az arq-worker service-re nincs is szükség, de futhat üresjáratban):
+#   CONFIG_PATH=config/config.fake.yaml docker compose up --build worker
 #
-# "Éles"-közeli, valódi adapterekkel (a szükséges pyproject extra-csoportokat a
-# build.args EXTRAS listájában kell felsorolni — ld. Dockerfile fejléce):
-#   docker compose --profile full up --build
+# "Éles"-közeli, valódi adapterekkel + Redis-queue-val (a szükséges pyproject
+# extra-csoportokat az EXTRAS build-argban kell felsorolni — ld. Dockerfile
+# fejléce; ilyenkor mindkét service (worker + arq-worker) kell fusson, mert a
+# batch job-okat az arq-worker dolgozza fel, nem maga az API-process):
+#   EXTRAS=asr-faster-whisper,asr-vosk docker compose up --build
 
 services:
   worker:
@@ -14,7 +17,7 @@ services:
       args:
         # Alapértelmezetten üres -> csak a `fake` adapterek működnek (ld.
         # Dockerfile fejléce). Éles adapterekhez pl.:
-        # EXTRAS: "asr-faster-whisper,asr-vosk,embedding-speechbrain,embedding-resemblyzer,vad-silero,audio"
+        # EXTRAS: "asr-faster-whisper,asr-vosk,embedding-speechbrain,embedding-resemblyzer,vad-silero"
         EXTRAS: "${EXTRAS:-}"
     image: leiratozo:local
     ports:
@@ -49,6 +52,28 @@ services:
     #         - driver: nvidia
     #           count: 1
     #           capabilities: [gpu]
+
+  arq-worker:
+    # A batch job-okat feldolgozó KÜLÖN process (docs/phase1-terv.md 11.
+    # szakasz) — csak `queue.backend: redis` esetén releváns (ld. fenti
+    # 'worker' service CONFIG_PATH-ja); `inline` configgal (config.fake.yaml)
+    # egyszerűen nem kap munkát, ártalmatlanul üresjáratban vár.
+    build:
+      context: .
+      args:
+        EXTRAS: "${EXTRAS:-}"
+    image: leiratozo:local
+    command: ["arq", "leiratozo.queue.worker.WorkerSettings"]
+    env_file:
+      - .env
+    environment:
+      CONFIG_PATH: "${CONFIG_PATH:-/app/config/config.example.yaml}"
+    volumes:
+      - ./config:/app/config:ro
+      - models:/models
+      - data:/data
+    depends_on:
+      - redis
 
   redis:
     image: redis:7-alpine
