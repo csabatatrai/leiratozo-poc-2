@@ -25,12 +25,12 @@ classDiagram
     class LeiratozoWorker {
         <<component>>
         +POST /v1/jobs
-        +GET /v1/jobs/{id}
-        +GET /v1/jobs/{id}/result
-        +WS /v1/live/{session_id}
+        +GET /v1/jobs/:id
+        +GET /v1/jobs/:id/result
+        +WS /v1/live/:session_id
         +POST /v1/speakers
         +GET /v1/speakers
-        +DELETE /v1/speakers/{id}
+        +DELETE /v1/speakers/:id
         +GET /healthz
         +GET /readyz
         +GET /v1/config
