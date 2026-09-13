@@ -278,6 +278,10 @@ diarizált, de névtelen beszélő-szegmenst (`"S1"`) össze tudjon vetni egy
 korábban regisztrált, **ismert** beszélő-profillal — ez alapozza meg a
 beszélő-azonosítást (lásd lejjebb: cosine similarity).
 
+**Gyakorlati útmutató:** milyen és mennyi hangmintát érdemes felvenni a
+regisztrációhoz (ajánlott felvételi hossz, felolvasandó magyar/angol
+szövegek, minőségi tippek) — ld. [`voiceprint/README.md`](voiceprint/README.md).
+
 ### Cosine similarity (koszinusz-hasonlóság)
 
 **Általános jelentés:** Két vektor közötti hasonlóság mértéke, ami a
